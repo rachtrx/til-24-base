@@ -18,6 +18,13 @@ bash init.bash TEAM-NAME TRACK
 
 This should initialize [GCSFuse](https://cloud.google.com/storage/docs/gcs-fuse) to allow you to access your track's data GCS bucket (either `til-ai-24-novice` or `til-ai-24-advanced`, mounted at `$HOME/novice` or `$HOME/advanced` respectively), the NSC data bucket (`til-ai-24-data` mounted at `$HOME/nsc`) as well as your own team's private GCS bucket (`TEAM-NAME-til-ai-24` mounted at `$HOME/TEAM-NAME`) on your local filesystem. It should also configure Docker authentication to authenticate for the `asia-southeast1` Artifact Registry, as well as configure the default Docker repository to be your team's private repository (`repository-TEAM-NAME`).
 
+To check for the mounts, run `df -h`:
+```bash
+til-ai-24-novice         1.0P     0  1.0P   0% /home/jupyter/novice
+404-not-found-til-ai-24  1.0P     0  1.0P   0% /home/jupyter/404-not-found
+til-ai-24-data           1.0P     0  1.0P   0% /home/jupyter/nsc
+```
+
 WARNING: Do not run `init.bash` twice. While it shouldn't brick your instance, there's a chance it may. Run it once, with the right arguments, and everything will be fine.
 
 ## General notes
@@ -76,6 +83,13 @@ Audio files are provided in .WAV format with a sample rate of 16 kHz. Images are
 In the audio datasets provided to both the Novice and Advanced Guardians, noise will already be present. Should Guardians wish to finetune their models on additional data, they are also free to use the (clean, unaugmented) National Speech Corpus data present in the til-ai-24-data bucket.
 
 As for the image datasets provided to both the Novice and Advanced Guardians, there will be no noise present. However, it is worth noting that Advanced Guardians' models would have to be adequately robust to noise due to the degradation of their robot sensors.
+
+
+## Data Augmentation
+
+In real-life scenarios, it is common for the distribution of incoming deployment data to deviate from the distribution of the data the model was trained on. As a result of data drift, your training data will not perfectly match the data presented to you in subsequent rounds. In light of this, you will have to ensure your submitted models are robust enough to still make good predictions on noisy out-of-distribution data.
+
+While your team is free to use whatever libraries you wish for data augmentation, we suggest the audiomentations library for audio augmentation and the albumentations library for image augmentation due to their ease of use.
 
 ### Audio Augmentation with audiomentations
 
