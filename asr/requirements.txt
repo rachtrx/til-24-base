@@ -4,3 +4,4 @@ fastapi
 accelerate
 uvicorn[standard]
 pandas==2.0.3
+nemo_toolkit

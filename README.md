@@ -25,6 +25,16 @@ til-ai-24-novice         1.0P     0  1.0P   0% /home/jupyter/novice
 til-ai-24-data           1.0P     0  1.0P   0% /home/jupyter/nsc
 ```
 
+If mounts are dropped when instance is started, run the following:
+```bash
+sudo umount novice
+sudo umount nsc
+sudo umount chatgpt
+mount novice
+mount nsc
+mount chatgpt
+```
+
 WARNING: Do not run `init.bash` twice. While it shouldn't brick your instance, there's a chance it may. Run it once, with the right arguments, and everything will be fine.
 
 ## General notes
