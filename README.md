@@ -1,5 +1,10 @@
 # BrainHack TIL-24 Base
 
+#######################################################
+Group Name: 404-not-found
+Group Members: Hovan, Issac, Kaarthik, Rachmiel, Wei En
+#######################################################
+
 ## Important Links
 
 - [Guardian's Handbook](https://www.notion.so/tribegroup/BrainHack-2024-TIL-AI-Guardian-s-Handbook-c5d4ec3c3bd04b0db0329884c220791f)
