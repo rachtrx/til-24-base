@@ -425,4 +425,4 @@ if __name__ == '__main__':
         devices=1
     )
     
-    trainer.fit(data_module)
+    trainer.fit(vlm_model)
