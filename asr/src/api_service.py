@@ -4,7 +4,7 @@ from ASRManager import ASRManager
 
 app = FastAPI()
 
-asr_manager = ASRManager(model_path="./models/whisper")
+asr_manager = ASRManager(model_path="../models/whisper")
 
 
 @app.get("/health")
