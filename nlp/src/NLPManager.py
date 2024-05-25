@@ -7,6 +7,11 @@ import spacy
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
 from typing import Dict
+import re
+
+label_list = ["O", "B-TARGET", "I-TARGET", "B-HEADING", "I-HEADING", "B-TOOL", "I-TOOL"]
+id2label = {i: label for i, label in enumerate(label_list)}
+label2id = {label: i for i, label in enumerate(label_list)}
 
 class NLPManager:
     def __init__(self, model_name="./models/nlp_4"):
@@ -18,10 +23,13 @@ class NLPManager:
         self.descriptive_vector = self.get_mean_embedding_spacy("colorful vibrant bright vivid") # TODO since data is mostly color describing targets
         self.weapon_vector = self.get_mean_embedding_spacy("gun rifle knife bomb missile grenade weapon")
     
-    @staticmethod
-    def get_mean_embedding_spacy(text):
+    def get_mean_embedding_spacy(self, text):
         doc = self.nlp(text)
         return np.mean([token.vector for token in doc if token.has_vector], axis=0)
+    
+    @staticmethod
+    def cosine_sim(vec1, vec2):
+        return cosine_similarity([vec1], [vec2])[0][0]
     
     @staticmethod
     def clean_transcript(transcript):
@@ -69,14 +77,14 @@ class NLPManager:
                 best_entity = entity
         return best_entity
     
-    def predict_context(context, model):
+    def predict_context(self, context):
         sentence = self.clean_transcript(context)
         tokens = sentence.split()
         tokens = [self.word_to_num(word) for word in tokens]
         inputs = self.tokenizer(tokens, is_split_into_words=True, return_tensors="pt", padding="max_length", truncation=True).to(self.device)
         
         with torch.no_grad():
-            outputs = model(**inputs)
+            outputs = self.model(**inputs)
         predictions = outputs.logits.cpu().numpy()
         preds = np.argmax(predictions, axis=2)
         word_ids = inputs.word_ids(batch_index=0)
@@ -116,13 +124,13 @@ class NLPManager:
         
         headings = entity_types.get("HEADING")
         if headings:
-            result['heading'] = headings[0]
+            result['heading'] = headings[0].replace(" ", "")
         targets = entity_types.get("TARGET")
         if targets and len(targets) > 0:
-            result['target'] = sorted(entities, key=lambda x: cosine_sim(self.get_mean_embedding_spacy(x), self.descriptive_vector), reverse=True)[0]
+            result['target'] = sorted(targets, key=lambda x: self.cosine_sim(self.get_mean_embedding_spacy(x), self.descriptive_vector), reverse=True)[0]
         tools = entity_types.get("TOOL")
         if tools and len(tools) > 0:
-            result['tool'] = sorted(entities, key=lambda x: cosine_sim(self.get_mean_embedding_spacy(x), self.weapon_vector), reverse=True)[0]
+            result['tool'] = sorted(tools, key=lambda x: self.cosine_sim(self.get_mean_embedding_spacy(x), self.weapon_vector), reverse=True)[0]
 
         return result
     

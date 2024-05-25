@@ -25,6 +25,7 @@ import torch.nn.functional as F
 import torchvision.models.detection as detection
 from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 from torchvision.models.detection.image_list import ImageList
+from torchvision.models.detection import fasterrcnn_resnet50_fpn_v2, FasterRCNN_ResNet50_FPN_V2_Weights
 
 import multiprocessing as mp
 
@@ -102,7 +103,7 @@ class BatchDataLoader:
             print(f"Skipping invalid image: {image_path}")
             return None
         # Convert to a PyTorch tensor
-        image_tensor = torch.from_numpy(image_array).type(torch.float32).to('cuda')
+        image_tensor = torch.from_numpy(image_array.copy()).type(torch.float32).to('cuda')
         return image_tensor
 
     @staticmethod
@@ -268,8 +269,8 @@ class ImageDetectionModel(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         rcnn_image_tensors, clip_image_tensors, clip_text_data, bboxes_batch, labels_batch = batch
 
-        clip_texts_preprocessed = [{key: torch.tensor(value).to(self.device) for key, value in item.items()} for item in clip_text_data]
-
+        clip_texts_preprocessed = [{key: value.clone().detach().to(self.device) for key, value in item.items()} for item in clip_text_data]
+        
         targets = []
         for bboxes, labels in zip(bboxes_batch, labels_batch):
             mask = labels != 0
@@ -308,7 +309,7 @@ class ImageDetectionModel(pl.LightningModule):
     def validation_step(self, batch, batch_idx):
         rcnn_image_tensors, clip_image_tensors, clip_text_data, bboxes_batch, labels_batch = batch
 
-        clip_texts_preprocessed = [{key: torch.tensor(value).to(self.device) for key, value in item.items()} for item in clip_text_data]
+        clip_texts_preprocessed = [{key: value.clone().detach().to(self.device) for key, value in item.items()} for item in clip_text_data]
 
         targets = []
         for bboxes, labels in zip(bboxes_batch, labels_batch):
@@ -357,7 +358,7 @@ class ImageDetectionModel(pl.LightningModule):
         rcnn_image_tensors, clip_image_tensors, clip_text_data, _, _ = batch
         # Assuming test data might not always have labels available
 
-        clip_texts_preprocessed = [{key: torch.tensor(value).to(self.device) for key, value in item.items()} for item in clip_text_data]
+        clip_texts_preprocessed = [{key: value.clone().detach().to(self.device) for key, value in item.items()} for item in clip_text_data]
 
         # Put model in evaluation mode
         self.rcnn.eval()
@@ -376,21 +377,23 @@ class ImageDetectionModel(pl.LightningModule):
         return predictions
                 
     def train_dataloader(self):
-        return DataLoader(self.train_dataset, batch_size=None, num_workers=self.num_workers)
+        return DataLoader(self.train_dataset, batch_size=None, num_workers=self.num_workers, persistent_workers=True)
 
     def val_dataloader(self):
-        return DataLoader(self.val_dataset, batch_size=None, num_workers=self.num_workers)
-    
+        return DataLoader(self.val_dataset, batch_size=None, num_workers=self.num_workers, persistent_workers=True)
+
     def test_dataloader(self):
-        return DataLoader(self.test_dataset, num_workers=self.num_workers)
+        return DataLoader(self.test_dataset, num_workers=self.num_workers, persistent_workers=True)
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=1e-4)
+        optimizer = torch.optim.Adam(self.parameters(), lr=0.001)
         return optimizer
 
 
 if __name__ == '__main__':
     mp.set_start_method('spawn', force=True)
+    
+    checkpoint_path = 'model_checkpoints/vlm_model-epoch=00-val_loss=34.28.ckpt'
     
     early_stopping_callback = EarlyStopping(
         monitor='val_loss',  # metric to monitor
@@ -403,26 +406,28 @@ if __name__ == '__main__':
     checkpoint_callback = pl.callbacks.ModelCheckpoint(
         monitor='val_loss',
         dirpath='model_checkpoints',
-        filename='asr_model-{epoch:02d}-{val_loss:.2f}',
+        filename='vlm_model-{epoch:02d}-{val_loss:.2f}',
         save_top_k=3,
         mode='min',
     )
 
-    vlm_model = ImageDetectionModel(
+    vlm_model = ImageDetectionModel.load_from_checkpoint(
+        checkpoint_path,
         train_data=(train_dir, TRAIN_NUM_BATCHES), 
         val_data=(val_dir, TEST_NUM_BATCHES), 
         test_data=(test_dir, VAL_NUM_BATCHES), 
         num_classes=NUM_CLASSES,
-        num_workers=0
+        num_workers=4
     )
 
     trainer = pl.Trainer(
-        max_steps=TRAIN_NUM_BATCHES,  # Maximum number of steps (batches) to train for
+        max_steps=TRAIN_NUM_BATCHES*49,  # Maximum number of steps (batches) to train for
         callbacks=[checkpoint_callback, early_stopping_callback], # CustomProgressBar()
         val_check_interval=TRAIN_NUM_BATCHES,
         limit_val_batches=VAL_NUM_BATCHES,  # Limit the number of validation batches
         accelerator="gpu",
-        devices=1
+        devices=1,
+        accumulate_grad_batches=4
     )
     
     trainer.fit(vlm_model)

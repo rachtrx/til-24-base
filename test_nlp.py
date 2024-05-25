@@ -53,6 +53,7 @@ def run_batched(
                 }
             ),
         )
+        print(response.json()["predictions"])
         _results = response.json()["predictions"]
         results.extend(
             [
