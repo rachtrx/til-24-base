@@ -1,4 +1,5 @@
 models/
+model/
 results/
 data/
 lightning_logs/

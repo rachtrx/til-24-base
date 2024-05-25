@@ -21,7 +21,9 @@ COPY requirements.txt .
 RUN pip install -r requirements.txt
 
 # copy the rest of the files into the container
-COPY src .
+COPY src/whisper/models /workspace/models
+COPY src/api_service.py /workspace/api_service.py
+COPY src/ASRManager.py /workspace/ASRManager.py
 
 # start model service
 CMD uvicorn api_service:app --port 5001 --host 0.0.0.0

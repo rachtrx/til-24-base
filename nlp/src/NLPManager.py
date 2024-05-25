@@ -14,7 +14,7 @@ id2label = {i: label for i, label in enumerate(label_list)}
 label2id = {label: i for i, label in enumerate(label_list)}
 
 class NLPManager:
-    def __init__(self, model_name="./models/nlp_4"):
+    def __init__(self, model_name="./model"):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.model = AutoModelForTokenClassification.from_pretrained(model_name)
         self.model.to(self.device)
@@ -92,7 +92,6 @@ class NLPManager:
         pred_labels = [id2label[pred] if word_idx is not None else 'O' for pred, word_idx in zip(preds[0], word_ids)]
         tokens = self.tokenizer.convert_ids_to_tokens(inputs['input_ids'][0])
 
-        entity_list = []
         entity_types = {}
         current_entity = []
         current_label = None
@@ -136,7 +135,7 @@ class NLPManager:
                 entity_types[current_label] = []
             entity_types[current_label].append(" ".join(current_entity))
 
-        result = {"heading": None, "target": None, "tool": None}
+        result = {"heading": "", "target": "", "tool": ""}
 
         headings = entity_types.get("HEADING")
         if headings:

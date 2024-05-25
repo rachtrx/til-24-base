@@ -33,35 +33,6 @@ async def identify(instance: Request):
     return {"predictions": predictions}
 
 
-def unadjust_bbox(adjusted_bbox, original_size, target_size, pad_width, pad_height):
-    """
-    Revert the adjusted bounding box to its original dimensions.
-
-    Args:
-    adjusted_bbox (list): The bounding box adjusted for resized and padded image.
-    original_size (tuple): Original dimensions of the image (width, height).
-    target_size (int): The target size to which the longer side of the image was resized.
-    pad_width (int): Padding added to the width to center the image.
-    pad_height (int): Padding added to the height to center the image.
-
-    Returns:
-    list: The bounding box reverted to original image dimensions.
-    """
-    original_width, original_height = original_size
-    scale_x = original_width / target_size
-    scale_y = original_height / target_size
-
-    # Unadjust bounding box
-    x_min, y_min, x_max, y_max = adjusted_bbox
-    x_min = (x_min - pad_width) * scale_x
-    y_min = (y_min - pad_height) * scale_y
-    x_max = (x_max - pad_width) * scale_x
-    y_max = (y_max - pad_height) * scale_y
-    original_bbox = [x_min, y_min, x_max, y_max]
-
-    return original_bbox
-
-
 def convert_bbox_to_dimensions(bbox): # CONVERT
     """
     Convert a bounding box from [x1, y1, x2, y2] to [x, y, width, height].
