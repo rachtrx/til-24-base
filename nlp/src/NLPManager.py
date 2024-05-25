@@ -78,11 +78,11 @@ class NLPManager:
         return best_entity
     
     def predict_context(self, context):
-        sentence = self.clean_transcript(context)
-        tokens = sentence.split()
+        cleaned_sentence = self.clean_transcript(context)
+        tokens = cleaned_sentence.split()
         tokens = [self.word_to_num(word) for word in tokens]
         inputs = self.tokenizer(tokens, is_split_into_words=True, return_tensors="pt", padding="max_length", truncation=True).to(self.device)
-        
+
         with torch.no_grad():
             outputs = self.model(**inputs)
         predictions = outputs.logits.cpu().numpy()
@@ -97,16 +97,32 @@ class NLPManager:
         current_entity = []
         current_label = None
 
-        for token, label in zip(tokens, pred_labels):
+        original_tokens = re.findall(r'\w+|[^\w\s]', context, re.UNICODE)
+
+        cleaned_index = 0
+        cleaned_words = cleaned_sentence.split()
+        cleaned_to_original = []
+
+        for token in cleaned_words:
+            while cleaned_index < len(original_tokens) and token != original_tokens[cleaned_index]:
+                cleaned_index += 1
+            if cleaned_index < len(original_tokens):
+                cleaned_to_original.append(cleaned_index)
+                cleaned_index += 1
+
+        for idx, (token, label) in enumerate(zip(cleaned_words, pred_labels)):
+            original_idx = cleaned_to_original[idx] if idx < len(cleaned_to_original) else None
+            original_token = original_tokens[original_idx] if original_idx is not None else None
+
             if label.startswith("B-"):
                 if current_entity and current_label:
                     if current_label not in entity_types:
                         entity_types[current_label] = []
                     entity_types[current_label].append(" ".join(current_entity))
-                current_entity = [token]
+                current_entity = [original_token] if original_token else []
                 current_label = label[2:]
             elif label.startswith("I-") and current_label == label[2:]:
-                current_entity.append(token)
+                current_entity.append(original_token) if original_token else None
             else:
                 if current_entity and current_label:
                     if current_label not in entity_types:
@@ -119,9 +135,9 @@ class NLPManager:
             if current_label not in entity_types:
                 entity_types[current_label] = []
             entity_types[current_label].append(" ".join(current_entity))
-        
+
         result = {"heading": None, "target": None, "tool": None}
-        
+
         headings = entity_types.get("HEADING")
         if headings:
             result['heading'] = headings[0].replace(" ", "")
