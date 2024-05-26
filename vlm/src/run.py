@@ -60,7 +60,6 @@ class BatchDataLoader:
         self.batch_path = batch_path
 
     def load_data(self):
-        # Load image paths
         with open(os.path.join(self.batch_path, "rcnn_img_paths.json"), 'r') as f:
             rcnn_image_paths = json.load(f)
         with open(os.path.join(self.batch_path, "clip_img_paths.json"), 'r') as f:
@@ -69,12 +68,10 @@ class BatchDataLoader:
         rcnn_image_tensors = self.load_and_stack_images(rcnn_image_paths)
         clip_pixel_values = self.load_and_stack_images(clip_image_paths, img_type='clip')
 
-        # Load text data
         with open(os.path.join(self.batch_path, "text_data.json"), 'r') as f:
             text_data = json.load(f)
         text_data_tensors = [self.convert_to_tensors(item) for item in text_data]
 
-        # Load bounding boxes and labels
         bboxes_batch = self.load_bboxes(os.path.join(self.batch_path, "bboxes.npy"))
         labels_batch = self.load_labels(os.path.join(self.batch_path, "labels.npy"))
 
@@ -82,48 +79,41 @@ class BatchDataLoader:
     
     def load_and_stack_images(self, image_paths, img_type='rcnn'):
         image_tensors = [self.load_image_to_tensor(image_path) for image_path in image_paths]
-        # Filter out None values in case of invalid images
         image_tensors = [tensor for tensor in image_tensors if tensor is not None]
         if not image_tensors:
             return None
         if img_type == 'rcnn':
             return torch.stack(image_tensors)
         elif img_type == 'clip':
-            # Convert all image tensors to a list of dictionaries
             clip_inputs = [{"pixel_values": tensor.unsqueeze(0)} for tensor in image_tensors]
             return clip_inputs
-        else:
-            raise ValueError("Invalid image type specified. Use 'rcnn' or 'clip'.")
     
     @staticmethod
     def load_image_to_tensor(image_path):
-        # Load the image data as a memory-mapped array
         image_array = np.load(image_path, mmap_mode='r')
         if image_array is None or image_array.size == 0:
             print(f"Skipping invalid image: {image_path}")
             return None
-        # Convert to a PyTorch tensor
-        image_tensor = torch.from_numpy(image_array.copy()).type(torch.float32).to('cuda')
-        return image_tensor
+        # Explicitly copy the array to ensure it's writable
+        return torch.from_numpy(image_array.copy()).type(torch.float32)
 
     @staticmethod
     def convert_to_tensors(data):
-        converted_data = {key: torch.tensor(value).to('cuda') for key, value in data.items()}
+        # Ensure each value is converted to a tensor and is copied to be writable
+        converted_data = {key: torch.tensor(value).clone() for key, value in data.items()}
         return converted_data
 
     @staticmethod
     def load_bboxes(bboxes_path):
         bboxes_batch = np.load(bboxes_path, mmap_mode='r')
-        # Convert numpy arrays to torch tensors and move to GPU
-        bboxes_batch = torch.stack([torch.tensor(b).view(-1, 4).to('cuda') for b in bboxes_batch])
-        return bboxes_batch
+        # Convert and copy each bounding box to ensure it's writable
+        return torch.stack([torch.tensor(b.copy()).view(-1, 4) for b in bboxes_batch])
 
     @staticmethod
     def load_labels(labels_path):
         labels_batch = np.load(labels_path, mmap_mode='r')
-        # Convert numpy arrays to torch tensors and move to GPU
-        labels_batch = torch.stack([torch.tensor([l]).to('cuda') for l in labels_batch])
-        return labels_batch
+        # Convert and copy each label to ensure it's writable
+        return torch.stack([torch.tensor([l]).clone() for l in labels_batch])
         
         
 class MemmapIterableDataset(IterableDataset):
@@ -268,8 +258,13 @@ class ImageDetectionModel(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         rcnn_image_tensors, clip_image_tensors, clip_text_data, bboxes_batch, labels_batch = batch
-
-        clip_texts_preprocessed = [{key: value.clone().detach().to(self.device) for key, value in item.items()} for item in clip_text_data]
+        
+        # Move tensors to GPU in the training step
+        rcnn_image_tensors = rcnn_image_tensors.to(self.device)
+        clip_image_tensors = [{key: val.to(self.device) for key, val in item.items()} for item in clip_image_tensors]
+        clip_texts_preprocessed = [{key: val.to(self.device) for key, val in item.items()} for item in clip_text_data]
+        bboxes_batch = bboxes_batch.to(self.device)
+        labels_batch = labels_batch.to(self.device)
         
         targets = []
         for bboxes, labels in zip(bboxes_batch, labels_batch):
@@ -308,8 +303,13 @@ class ImageDetectionModel(pl.LightningModule):
     
     def validation_step(self, batch, batch_idx):
         rcnn_image_tensors, clip_image_tensors, clip_text_data, bboxes_batch, labels_batch = batch
-
-        clip_texts_preprocessed = [{key: value.clone().detach().to(self.device) for key, value in item.items()} for item in clip_text_data]
+        
+        # Move tensors to GPU in the training step
+        rcnn_image_tensors = rcnn_image_tensors.to(self.device)
+        clip_image_tensors = [{key: val.to(self.device) for key, val in item.items()} for item in clip_image_tensors]
+        clip_texts_preprocessed = [{key: val.to(self.device) for key, val in item.items()} for item in clip_text_data]
+        bboxes_batch = bboxes_batch.to(self.device)
+        labels_batch = labels_batch.to(self.device)
 
         targets = []
         for bboxes, labels in zip(bboxes_batch, labels_batch):
@@ -358,8 +358,10 @@ class ImageDetectionModel(pl.LightningModule):
         rcnn_image_tensors, clip_image_tensors, clip_text_data, _, _ = batch
         # Assuming test data might not always have labels available
 
-        clip_texts_preprocessed = [{key: value.clone().detach().to(self.device) for key, value in item.items()} for item in clip_text_data]
-
+        rcnn_image_tensors = rcnn_image_tensors.to(self.device)
+        clip_image_tensors = [{key: val.to(self.device) for key, val in item.items()} for item in clip_image_tensors]
+        clip_texts_preprocessed = [{key: val.to(self.device) for key, val in item.items()} for item in clip_text_data]
+        
         # Put model in evaluation mode
         self.rcnn.eval()
 
@@ -393,7 +395,7 @@ class ImageDetectionModel(pl.LightningModule):
 if __name__ == '__main__':
     mp.set_start_method('spawn', force=True)
     
-    checkpoint_path = 'model_checkpoints/vlm_model-epoch=00-val_loss=34.28.ckpt'
+    checkpoint_path = 'model_checkpoints/vlm_model-epoch=00-val_loss=64.64.ckpt'
     
     early_stopping_callback = EarlyStopping(
         monitor='val_loss',  # metric to monitor

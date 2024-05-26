@@ -96,3 +96,6 @@ def run_batched(
 
 if __name__ == "__main__":
     main()
+
+    # Print the results
+    print("Results:", results)

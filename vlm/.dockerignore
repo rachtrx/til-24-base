@@ -1,0 +1,13 @@
+models/
+yolov8n.pt
+src/yolov8n.pt
+lightning_logs/
+data/
+src/data/
+src/lightning_logs/
+src/model_checkpoints/
+model_checkpoints/
+
+*.tmp
+*.log
+*.bin

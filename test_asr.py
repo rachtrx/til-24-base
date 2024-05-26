@@ -5,7 +5,7 @@ import pandas as pd
 import requests
 from tqdm import tqdm
 from pathlib import Path
-from scoring.asr_eval import asr_eval
+# from scoring.asr_eval import asr_eval
 from dotenv import load_dotenv
 import os
 
@@ -17,18 +17,17 @@ TEAM_TRACK = os.getenv("TEAM_TRACK")
 
 def main():
     # input_dir = Path(f"/home/jupyter/{TEAM_TRACK}")
-    input_dir = Path(f"../../data/{TEAM_TRACK}/train")
     # results_dir = Path(f"/home/jupyter/{TEAM_NAME}")
     results_dir = Path("results")
     results_dir.mkdir(parents=True, exist_ok=True)
     instances = []
 
-    with open(input_dir / "asr.jsonl", "r") as f:
+    with open("./asr.jsonl", "r") as f:
         for line in f:
             if line.strip() == "":
                 continue
             instance = json.loads(line.strip())
-            with open(input_dir / "audio" / instance["audio"], "rb") as file:
+            with open("audio" / instance["audio"], "rb") as file:
                 audio_bytes = file.read()
                 instances.append(
                     {**instance, "b64": base64.b64encode(audio_bytes).decode("ascii")}
@@ -38,10 +37,10 @@ def main():
     df = pd.DataFrame(results)
     df.to_csv(results_dir / "asr_results.csv", index=False)
     # calculate eval
-    eval_result = asr_eval(
-        [result["transcript"] for result in results],
-        [result["prediction"] for result in results],
-    )
+    # eval_result = asr_eval(
+    #     [result["transcript"] for result in results],
+    #     [result["prediction"] for result in results],
+    # )
     print(f"1-WER: {eval_result}")
 
 
@@ -74,6 +73,7 @@ def run_batched(
                 for i in range(len(_instances))
             ]
         )
+        print(results)
     return results
 
 

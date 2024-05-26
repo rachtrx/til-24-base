@@ -21,7 +21,9 @@ COPY requirements.txt .
 RUN pip install -r requirements.txt
 
 # copy the rest of the files into the container
-COPY src .
+COPY src/model /workspace/model
+COPY src/api_service.py /workspace/api_service.py
+COPY src/VLMManager.py /workspace/VLMManager.py
 
 # start model service
 CMD uvicorn api_service:app --port 5004 --host 0.0.0.0
