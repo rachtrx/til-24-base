@@ -5,16 +5,16 @@ import torchaudio
 import whisper
 import numpy as np
 from jiwer import wer
+import pytorch_lightning as pl
 
   # You can change this to any model you want to use
-save_directory = "../models/whisper"  # Path to save the model and processor
 
 class ASRManager:
     def __init__(self, model_path="./models/asr_model-epoch=04-val_loss=0.61.ckpt"):
         self.model_name = "distil-whisper/distil-medium.en"
         # self.model = AutoModelForSpeechSeq2Seq.from_pretrained(self.model_name, torch_dtype=torch.float16, low_cpu_mem_usage=True)
-        self.model = ASRModel.load_from_checkpoint(model_path)
         self.processor = AutoProcessor.from_pretrained(self.model_name)
+        self.model = ASRModel.load_from_checkpoint(model_path)
         self.model.eval()
         self.model.to('cuda')  # Move model to GPU
 
@@ -40,10 +40,11 @@ class ASRManager:
         return transcription[0]
     
 class ASRModel(pl.LightningModule):
-    def __init__(self, model, processor):
+    def __init__(self):
         super().__init__()
-        self.model = model
-        self.processor = processor
+        self.model_name = "distil-whisper/distil-medium.en"
+        self.model = AutoModelForSpeechSeq2Seq.from_pretrained(self.model_name)
+        self.processor = AutoProcessor.from_pretrained(self.model_name)
         self.loss_function = torch.nn.CrossEntropyLoss()
         
     def forward(self, input_ids, decoder_input_ids=None):

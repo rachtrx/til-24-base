@@ -45,10 +45,11 @@ val_dir = os.path.join(data_dir, "val")
 
 # Define your ASR model
 class ASRModel(pl.LightningModule):
-    def __init__(self, model, processor):
+    def __init__(self):
         super().__init__()
-        self.model = model
-        self.processor = processor
+        self.model_name = "distil-whisper/distil-medium.en"
+        self.model = AutoModelForSpeechSeq2Seq.from_pretrained(self.model_name).half()
+        self.processor = AutoProcessor.from_pretrained(self.model_name)
         self.loss_function = torch.nn.CrossEntropyLoss()
         
     def forward(self, input_ids, decoder_input_ids=None):
@@ -58,6 +59,8 @@ class ASRModel(pl.LightningModule):
         pred_ids = torch.argmax(logits, dim=-1)
         pred_str = self.processor.batch_decode(pred_ids)
         label_str = self.processor.batch_decode(labels, skip_special_tokens=True)
+        print(f'Predicted: {pred_str}')
+        print(f'Actual: {label_str}')
         return wer(label_str, pred_str), pred_str, label_str
 
     def training_step(self, batch, batch_idx):
@@ -123,16 +126,6 @@ class ASRModel(pl.LightningModule):
         # Implement your optimizer configuration here
         optimizer = torch.optim.Adam(self.model.parameters(), lr=1e-3)
         return optimizer
-    
-    @classmethod
-    def load_from_checkpoint(cls, checkpoint_path, model, processor):
-        # Load the checkpoint
-        checkpoint = torch.load(checkpoint_path)
-        # Initialize the model
-        instance = cls(model, processor)
-        # Load the state dict into the model
-        instance.load_state_dict(checkpoint['state_dict'])
-        return instance
     
 class ASRIterableDataset(IterableDataset):
     def __init__(self, data, tokenizer):
@@ -230,7 +223,7 @@ if __name__ == "__main__":
         # batch_size=1, # Removed param as setting to 2 causes errors, probably due to IterableDataset? Perhaps need to manually handle using arrays in Dataset class and update collate function.
     )
 
-    asr_model = ASRModel(model, processor)
+    asr_model = ASRModel()
     asr_model.to('cuda')
 
     # Train the model

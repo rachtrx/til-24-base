@@ -84,7 +84,7 @@ class NLPManager:
         inputs = self.tokenizer(tokens, is_split_into_words=True, return_tensors="pt", padding="max_length", truncation=True).to(self.device)
 
         with torch.no_grad():
-            outputs = self.model(**inputs)
+            outputs = self.trainer(**inputs)
         predictions = outputs.logits.cpu().numpy()
         preds = np.argmax(predictions, axis=2)
         word_ids = inputs.word_ids(batch_index=0)
@@ -96,32 +96,16 @@ class NLPManager:
         current_entity = []
         current_label = None
 
-        original_tokens = re.findall(r'\w+|[^\w\s]', context, re.UNICODE)
-
-        cleaned_index = 0
-        cleaned_words = cleaned_sentence.split()
-        cleaned_to_original = []
-
-        for token in cleaned_words:
-            while cleaned_index < len(original_tokens) and token != original_tokens[cleaned_index]:
-                cleaned_index += 1
-            if cleaned_index < len(original_tokens):
-                cleaned_to_original.append(cleaned_index)
-                cleaned_index += 1
-
-        for idx, (token, label) in enumerate(zip(cleaned_words, pred_labels)):
-            original_idx = cleaned_to_original[idx] if idx < len(cleaned_to_original) else None
-            original_token = original_tokens[original_idx] if original_idx is not None else None
-
+        for token, label in zip(tokens, pred_labels):
             if label.startswith("B-"):
                 if current_entity and current_label:
                     if current_label not in entity_types:
                         entity_types[current_label] = []
                     entity_types[current_label].append(" ".join(current_entity))
-                current_entity = [original_token] if original_token else []
+                current_entity = [token]
                 current_label = label[2:]
             elif label.startswith("I-") and current_label == label[2:]:
-                current_entity.append(original_token) if original_token else None
+                current_entity.append(token)
             else:
                 if current_entity and current_label:
                     if current_label not in entity_types:
@@ -142,12 +126,26 @@ class NLPManager:
             result['heading'] = headings[0].replace(" ", "")
         targets = entity_types.get("TARGET")
         if targets and len(targets) > 0:
-            result['target'] = sorted(targets, key=lambda x: self.cosine_sim(self.get_mean_embedding_spacy(x), self.descriptive_vector), reverse=True)[0]
+            target = sorted(targets, key=lambda x: self.cosine_sim(self.get_mean_embedding_spacy(x), self.descriptive_vector), reverse=True)[0]
+            result['target'] = self.find_with_punctuation(context, target)
         tools = entity_types.get("TOOL")
         if tools and len(tools) > 0:
-            result['tool'] = sorted(tools, key=lambda x: self.cosine_sim(self.get_mean_embedding_spacy(x), self.weapon_vector), reverse=True)[0]
-
+            tool = sorted(tools, key=lambda x: self.cosine_sim(self.get_mean_embedding_spacy(x), self.weapon_vector), reverse=True)[0]
+            result['tool'] = self.find_with_punctuation(context, tool)
         return result
+    
+    @staticmethod
+    def find_with_punctuation(original_text, clean_entity):
+        # Create a pattern that matches words in the clean entity, allowing for intervening punctuation
+        words = clean_entity.split()
+        pattern = r'\b' + r'\W*'.join(re.escape(word) for word in words) + r'\b'
+
+        # Search for the pattern in the original text
+        match = re.search(pattern, original_text, re.IGNORECASE)
+        if match:
+            # Return the matched substring, including any intervening punctuation
+            return original_text[match.start():match.end()]
+        return clean_entity
     
     def qa(self, context: str) -> Dict[str, str]:
         return self.predict_context(context)
