@@ -23,7 +23,7 @@ RUN pip install -r requirements.txt
 RUN python -m spacy download en_core_web_sm
 
 # copy the rest of the files into the container
-COPY src/models /workspace/models
+COPY src/model /workspace/model
 COPY src/api_service.py /workspace/api_service.py
 COPY src/NLPManager.py /workspace/NLPManager.py
 

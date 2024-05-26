@@ -166,6 +166,7 @@ if __name__ == "__main__":
         num_workers=2,
         # checkpoint_path='./models/asr_model-epoch=04-val_loss=0.61.ckpt'
     )
+    
     # Train the model
     trainer.fit(asr_model)
 

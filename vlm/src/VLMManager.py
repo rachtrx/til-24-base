@@ -14,8 +14,6 @@ from torch.utils.data import DataLoader
 class VLMManager:
     def __init__(self):
         # initialize the model here
-        self.model = ImageDetectionModel.load_from_checkpoint("./model/vlm_model-epoch=00-val_loss=62.85.ckpt", num_classes=8)
-        self.model.eval()
         self.rcnn_weights = FasterRCNN_ResNet50_FPN_V2_Weights.DEFAULT
         self.rcnn_preprocessor = self.rcnn_weights.transforms()
         self.clip_processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
@@ -44,13 +42,8 @@ class VLMManager:
         clip_image = {k: v.to(self.model.device) for k, v in clip_image.items()}
         clip_text = {k: v.to(self.model.device) for k, v in clip_text.items()}
         rcnn_image = rcnn_image.to(self.model.device)
-        # print(clip_image, clip_text, rcnn_image)
-        ## pull a specific mode that is saved
-        ## set the model to test first
-        # Forward pass
-        ## run the model
-        ## get the output
         
+        self.model.eval()
         with torch.no_grad():
             predictions = self.model([rcnn_image], [clip_image], [clip_text]) # targets is none, so list of [{'boxes': [], 'labels': [], 'scores': []}]
         
@@ -81,7 +74,6 @@ class ImageDetectionModel(pl.LightningModule):
         in_features = self.rcnn.roi_heads.box_predictor.cls_score.in_features
         self.rcnn.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes + 1)
         self.embedding_transform = nn.Linear(512, 256)
-        self.eval()
 
     def forward(self, rcnn_imgs_preprocessed, clip_imgs_preprocessed, clip_texts_preprocessed, targets=None):
         batch_feature_maps = []
@@ -89,9 +81,6 @@ class ImageDetectionModel(pl.LightningModule):
 
         for rcnn_img, clip_img, clip_text in zip(rcnn_imgs_preprocessed, clip_imgs_preprocessed, clip_texts_preprocessed):
             # Generate embeddings for both image and text from CLIP
-            print(rcnn_img.shape)
-            print(clip_img.keys())
-            print(clip_text.keys())
             image_embeddings, text_embeddings = self.generate_embeddings(clip_img, clip_text)
 
             # Ensure image is in [C, H, W] format and transfer to device
@@ -99,7 +88,6 @@ class ImageDetectionModel(pl.LightningModule):
 
             # Extract feature maps using the RCNN backbone
             feature_maps = self.get_feature_maps(rcnn_img.unsqueeze(0))['0']
-            print("Feature maps shape:", feature_maps.shape)
 
             # Modulate feature maps using both image and text embeddings
             modulated_feature_maps = self.modulate_features_with_embeddings(feature_maps, image_embeddings, text_embeddings)
@@ -109,16 +97,13 @@ class ImageDetectionModel(pl.LightningModule):
             
             # Resize modulated_feature_maps to have size [3, H, W]
             modulated_feature_maps = modulated_feature_maps[:3]  # Take the first 3 channels
-            print("Resized modulated feature maps shape:", modulated_feature_maps.shape)
             
             # Store processed feature maps
             batch_feature_maps.append(modulated_feature_maps)
 
         integrated_features = torch.stack(batch_feature_maps, dim=0)
-        print("Integrated features shape:", integrated_features.shape)
         
-        rcnn_outputs = self.rcnn(integrated_features, targets)
-        print("RCNN outputs:", rcnn_outputs)
+        return self.rcnn(integrated_features, targets)
     
     def generate_embeddings(self, clip_img_preprocessed, clip_text_preprocessed):
         with torch.no_grad():
